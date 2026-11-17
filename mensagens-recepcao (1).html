@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mensagens Prontas – Recepção</title>
+<style>
+:root{--bg:#fbf6f7;--card:#fff;--tx:#2b2326;--mut:#7a6a70;--pri:#b03a6a;--pri-tx:#fff;--bd:#eadde2;--ok:#2e8b57;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1518;--card:#262024;--tx:#f3eaed;--mut:#b5a3aa;--pri:#e0709b;--pri-tx:#1b1518;--bd:#3a3036;--ok:#5fcf93}}
+:root[data-theme="dark"]{--bg:#1b1518;--card:#262024;--tx:#f3eaed;--mut:#b5a3aa;--pri:#e0709b;--pri-tx:#1b1518;--bd:#3a3036;--ok:#5fcf93}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+.wrap{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:4px 0 2px}
+.sub{color:var(--mut);font-size:.9rem;margin:0 0 12px}
+.top{display:grid;gap:8px;margin-bottom:10px}
+input,textarea{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font:inherit}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px}
+.tab{flex:0 0 auto;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 12px;border-radius:999px;font:inherit;font-size:.9rem;cursor:pointer}
+.tab.on{background:var(--pri);color:var(--pri-tx);border-color:var(--pri)}
+.msg{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
+.msg h3{margin:0 0 6px;font-size:.95rem}
+.msg p{margin:0 0 10px;white-space:pre-wrap;font-size:.95rem}
+.row{display:flex;gap:8px}
+.btn{flex:1;border:0;border-radius:10px;padding:11px;font:inherit;font-weight:600;cursor:pointer;background:var(--pri);color:var(--pri-tx)}
+.btn.sec{background:transparent;color:var(--mut);border:1px solid var(--bd);flex:0 0 auto;font-weight:400}
+.btn.done{background:var(--ok);color:#fff}
+.add{margin-top:16px;display:none;gap:8px}
+.add.show{display:grid}
+.empty{color:var(--mut);text-align:center;padding:24px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mensagens prontas</h1>
+  <p class="sub">Escolha a situação, toque em “Copiar” e cole no WhatsApp.</p>
+  <div class="top">
+    <input id="nome" placeholder="Nome do paciente (opcional)" autocomplete="off">
+    <input id="busca" type="search" placeholder="Buscar: atraso, remarcar, parcela…" autocomplete="off">
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="lista"></div>
+  <button class="tab" id="btnAdd" style="width:100%;margin-top:6px">+ Adicionar minha própria mensagem</button>
+  <div class="add" id="add">
+    <input id="addTitulo" placeholder="Título (ex.: Paciente pediu desconto)">
+    <textarea id="addTexto" rows="5" placeholder="Texto. Use {saudacao} e {nome} para preencher automático."></textarea>
+    <button class="btn" id="salvar">Salvar mensagem</button>
+  </div>
+</div>
+<script>
+var BASE = [
+{c:"Atraso",t:"Paciente avisa que vai atrasar (até 15 min)",x:"{saudacao}, {nome}! Obrigada por avisar 😊 Vamos aguardar você. Pedimos apenas que chegue o quanto antes para conseguirmos realizar todo o seu atendimento com a qualidade de sempre."},
+{c:"Atraso",t:"Atraso maior (pode perder o horário)",x:"{saudacao}, {nome}! Obrigada por avisar. Como o atraso será maior, o seu horário pode ficar comprometido para não prejudicar os pacientes seguintes. Vou verificar com a equipe se conseguimos te encaixar e já te retorno, tudo bem?"},
+{c:"Atraso",t:"Quando não der para atender no horário",x:"{nome}, infelizmente com esse atraso não conseguiremos realizar o seu procedimento hoje sem prejudicar o próximo atendimento. Posso reagendar para o melhor dia e horário para você? Me diga qual prefere 😊"},
+{c:"Atraso",t:"Paciente já está atrasado e não avisou",x:"{saudacao}, {nome}! Passando para saber se está tudo bem. Seu horário era às {horario}. Você está a caminho? Fico no aguardo do seu retorno 😊"},
+{c:"Cancelar / Remarcar",t:"Paciente quer remarcar",x:"{saudacao}, {nome}! Sem problemas, vamos remarcar 😊 Qual dia e período ficam melhores para você (manhã ou tarde)? Vou ver os horários disponíveis e te confirmo."},
+{c:"Cancelar / Remarcar",t:"Paciente cancelou em cima da hora",x:"{saudacao}, {nome}! Entendemos que imprevistos acontecem. Lembramos que o aviso com antecedência nos ajuda a oferecer o horário para outro paciente. Vamos remarcar? Me diga o melhor dia para você."},
+{c:"Cancelar / Remarcar",t:"Oferecer novo horário",x:"{nome}, tenho estes horários disponíveis: {opcoes}. Qual fica melhor para você? Assim que confirmar, já deixo reservado 😊"},
+{c:"Cancelar / Remarcar",t:"Remarcação realizada com sucesso",x:"{saudacao}, {nome}! Sua remarcação foi realizada com sucesso ✅\n\n📅 Novo dia: {dia}\n⏰ Horário: {horario}\n\nEstamos te esperando na Emagrecentro Araruama! Qualquer imprevisto, é só nos avisar com antecedência 💛"},
+{c:"Cancelar / Remarcar",t:"Remarcação realizada (versão curta)",x:"{nome}, sua remarcação está confirmada para o dia {dia} às {horario} ✅ Te esperamos! 💛"},
+{c:"Confirmação",t:"Confirmar agenda (véspera)",x:"{saudacao}, {nome}! Passando para confirmar o seu atendimento amanhã às {horario} na Emagrecentro Araruama. Posso confirmar sua presença? Responda SIM para confirmar ou me avise caso precise remarcar 😊"},
+{c:"Confirmação",t:"Presença confirmada",x:"Perfeito, {nome}! Presença confirmada ✅ Te esperamos no horário combinado. Qualquer imprevisto, é só nos avisar com antecedência. Até lá!"},
+{c:"Confirmação",t:"Paciente não respondeu a confirmação",x:"{saudacao}, {nome}! Ainda não recebi a sua confirmação para o atendimento de {data} às {horario}. Consegue me confirmar por aqui? Assim garantimos o seu horário 😊"},
+{c:"Faltas",t:"Paciente faltou sem avisar",x:"{saudacao}, {nome}! Sentimos sua falta hoje 💛 Está tudo bem? Para não atrasar o seu acompanhamento, vamos reagendar? Me diga qual dia e horário ficam melhores para você."},
+{c:"Faltas",t:"Paciente sumiu / retomar contato",x:"{saudacao}, {nome}! Tudo bem com você? Percebi que faz um tempinho que não nos vemos e queremos muito ajudar você a continuar o seu tratamento. Posso verificar um horário para você voltar? 😊"},
+{c:"Primeira vez",t:"Agendar avaliação",x:"{saudacao}! Seja bem-vinda à Emagrecentro Araruama 💛 Vou agendar a sua avaliação. Qual dia e período ficam melhores para você? A avaliação é feita pela nossa equipe, com calma, para indicar o tratamento ideal para o seu caso."},
+{c:"Primeira vez",t:"Orientações antes da avaliação",x:"{nome}, sua avaliação está agendada para {data} às {horario}. Pedimos que chegue 10 minutos antes para o seu cadastro. Qualquer dúvida, estou à disposição 😊"},
+{c:"Primeira vez",t:"Endereço e localização",x:"{nome}, nosso endereço é: {endereco}. Qualquer dificuldade para chegar, me chame por aqui que te ajudo 😊"},
+{c:"Pós-atendimento",t:"Agradecer e cuidar após o procedimento",x:"{saudacao}, {nome}! Obrigada por ter vindo hoje 💛 Como você está se sentindo? Qualquer dúvida ou desconforto, é só me chamar por aqui que repasso para a equipe."},
+{c:"Pós-atendimento",t:"Lembrar da próxima sessão",x:"{nome}, a sua próxima sessão está marcada para {data} às {horario}. Posso contar com a sua presença? 😊"},
+{c:"Pagamento",t:"Lembrete de parcela",x:"{saudacao}, {nome}! Passando para lembrar, com carinho, da parcela com vencimento em {data}. Se já realizou o pagamento, por favor desconsidere. Qualquer dúvida, estou à disposição 😊"},
+{c:"Pagamento",t:"Parcela em atraso",x:"{saudacao}, {nome}! Notei que a parcela com vencimento em {data} ainda não consta como paga. Aconteceu algum imprevisto? Podemos combinar a melhor forma de regularizar. Fico no aguardo do seu retorno 😊"},
+{c:"Pagamento",t:"Enviar comprovante / chave Pix",x:"{nome}, segue a nossa chave Pix: {pix}. Após o pagamento, por favor me envie o comprovante por aqui para eu dar baixa no seu cadastro. Obrigada! 💛"},
+{c:"Dúvidas",t:"Horário de atendimento",x:"{saudacao}! Nosso horário de atendimento é: {funcionamento}. Posso agendar um horário para você? 😊"},
+{c:"Dúvidas",t:"Pedem valor / preço pelo WhatsApp",x:"{saudacao}! Os valores variam de acordo com a avaliação, pois cada paciente recebe um protocolo personalizado. Posso agendar uma avaliação para você conhecer o tratamento ideal e as condições? 😊"},
+{c:"Dúvidas",t:"Dúvida clínica (encaminhar para equipe)",x:"{nome}, boa pergunta! Para te orientar com segurança, vou passar a sua dúvida para a nossa equipe técnica e já te retorno, tudo bem? 😊"},
+{c:"Dúvidas",t:"Resposta rápida: já estou verificando",x:"{saudacao}, {nome}! Recebi a sua mensagem. Vou verificar e já te respondo, só um momentinho 😊"}
+];
+var KEY="msgs_recepcao_v1", CUSTOM=[], cat="Todas", q="";
+try{CUSTOM=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){CUSTOM=[]}
+function saudacao(){var h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite"}
+function preencher(t){var n=document.getElementById("nome").value.trim();
+ t=t.replace(/\{saudacao\}/g,saudacao());
+ if(n){t=t.replace(/\{nome\}/g,n)}else{t=t.replace(/, \{nome\}/g,"").replace(/\{nome\}, /g,"").replace(/\{nome\}/g,"")}
+ return t}
+function todas(){return BASE.concat(CUSTOM.map(function(m){return {c:"Minhas",t:m.t,x:m.x,custom:1}}))}
+function cats(){var s=["Todas"];todas().forEach(function(m){if(s.indexOf(m.c)<0)s.push(m.c)});return s}
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function copiar(txt,btn){
+ function ok(){var o=btn.textContent;btn.textContent="Copiado ✓";btn.classList.add("done");setTimeout(function(){btn.textContent=o;btn.classList.remove("done")},1400)}
+ function fallback(){var a=document.createElement("textarea");a.value=txt;document.body.appendChild(a);a.select();try{document.execCommand("copy")}catch(e){}document.body.removeChild(a);ok()}
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,fallback)}else{fallback()}}
+function render(){
+ var tb=document.getElementById("tabs");tb.innerHTML="";
+ cats().forEach(function(c){var b=el("button","tab"+(c===cat?" on":""),c);b.onclick=function(){cat=c;render()};tb.appendChild(b)});
+ var l=document.getElementById("lista");l.innerHTML="";
+ var n=0,qq=q.toLowerCase();
+ todas().forEach(function(m){
+  if(cat!=="Todas"&&m.c!==cat)return;
+  if(qq&&(m.t+" "+m.x+" "+m.c).toLowerCase().indexOf(qq)<0)return;
+  n++;
+  var d=el("div","msg");d.appendChild(el("h3",null,m.t));
+  var txt=preencher(m.x);d.appendChild(el("p",null,txt));
+  var r=el("div","row");var b=el("button","btn","Copiar");b.onclick=function(){copiar(preencher(m.x),b)};r.appendChild(b);
+  if(m.custom){var x=el("button","btn sec","Excluir");x.onclick=function(){if(confirm("Excluir esta mensagem?")){CUSTOM=CUSTOM.filter(function(c){return c.t!==m.t||c.x!==m.x});salvarLocal();render()}};r.appendChild(x)}
+  d.appendChild(r);l.appendChild(d)});
+ if(!n)l.appendChild(el("div","empty","Nenhuma mensagem encontrada."))}
+function salvarLocal(){try{localStorage.setItem(KEY,JSON.stringify(CUSTOM))}catch(e){}}
+document.getElementById("nome").oninput=render;
+document.getElementById("busca").oninput=function(e){q=e.target.value;render()};
+document.getElementById("btnAdd").onclick=function(){document.getElementById("add").classList.toggle("show")};
+document.getElementById("salvar").onclick=function(){
+ var t=document.getElementById("addTitulo").value.trim(),x=document.getElementById("addTexto").value.trim();
+ if(!t||!x){alert("Preencha o título e o texto.");return}
+ CUSTOM.push({t:t,x:x});salvarLocal();
+ document.getElementById("addTitulo").value="";document.getElementById("addTexto").value="";
+ document.getElementById("add").classList.remove("show");cat="Minhas";render()};
+render();
+</script>
+</body>
+</html>
